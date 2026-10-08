@@ -5175,7 +5175,7 @@ func mapRequestBody(requestBodyRef *openapi3.RequestBodyRef, method, path string
 	seenCamelNames := map[string]bool{}
 	for _, name := range names {
 		schema := schemaRefValue(properties[name])
-		if schema != nil && schema.ReadOnly {
+		if bodySchemaReadOnly(schema) {
 			continue
 		}
 		camelName := toCamelCase(name)
@@ -5297,6 +5297,30 @@ func requestBodyMediaType(content openapi3.Content) (string, *openapi3.MediaType
 	}
 
 	return "", nil
+}
+
+// AllOf members describe the same property; unions and child schemas do not.
+func bodySchemaReadOnly(schema *openapi3.Schema) bool {
+	pending := []*openapi3.Schema{schema}
+	visited := map[*openapi3.Schema]struct{}{}
+	for len(pending) > 0 {
+		schema := pending[len(pending)-1]
+		pending = pending[:len(pending)-1]
+		if schema == nil {
+			continue
+		}
+		if _, seen := visited[schema]; seen {
+			continue
+		}
+		visited[schema] = struct{}{}
+		if schema.ReadOnly {
+			return true
+		}
+		for _, ref := range schema.AllOf {
+			pending = append(pending, schemaRefValue(ref))
+		}
+	}
+	return false
 }
 
 func bodyParamSchema(schema *openapi3.Schema) *openapi3.Schema {
@@ -5603,7 +5627,7 @@ func mapBodyFieldsDepth(schema *openapi3.Schema, inferCSVArrays bool, visited ma
 	fields := make([]spec.Param, 0, len(names))
 	for _, name := range names {
 		propertySchema := schemaRefValue(schema.Properties[name])
-		if propertySchema != nil && propertySchema.ReadOnly {
+		if bodySchemaReadOnly(propertySchema) {
 			continue
 		}
 		fieldSchema := bodyParamSchema(propertySchema)

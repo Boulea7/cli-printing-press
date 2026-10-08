@@ -151,7 +151,7 @@ components:
   schemas:
     Job:
       type: object
-      required: [kind, targetId, comment, parentJob]
+      required: [kind, targetId, comment, parentJob, serverId]
       properties:
         id: {type: integer}
         kind: {type: string, enum: [UNDO]}
@@ -161,6 +161,8 @@ components:
           readOnly: true
           allOf:
             - $ref: '#/components/schemas/Job'
+        serverId: {allOf: [{type: integer, readOnly: true}]}
+        serverNote: {allOf: [{type: string, readOnly: true}]}
         password: {type: string, writeOnly: true}
         visible: {type: string, readOnly: false}
     JobPostRequestBody:
@@ -177,7 +179,7 @@ components:
       type: object
       required: [serverId]
       properties:
-        serverId: {type: integer, readOnly: true}
+        serverId: {allOf: [{type: integer}, {readOnly: true}]}
 `
 
 const readOnlyRequestRuntimeTest = `package mcp
@@ -225,12 +227,12 @@ func TestReadOnlyRequestInputs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"comment", "parentJob", "job-comment", "job-parent-job", "metadata-server-id"} {
+	for _, name := range []string{"comment", "parentJob", "serverId", "serverNote", "job-comment", "job-parent-job", "job-server-id", "job-server-note", "metadata-server-id"} {
 		if _, ok := create.Tool.InputSchema.Properties[name]; ok {
 			t.Errorf("read-only MCP input %s was exposed", name)
 		}
 	}
-	for _, name := range []string{"comment", "parent-job", "job-comment", "job-parent-job", "metadata-server-id"} {
+	for _, name := range []string{"comment", "parent-job", "server-id", "server-note", "job-comment", "job-parent-job", "job-server-id", "job-server-note", "metadata-server-id"} {
 		if command.Flags().Lookup(name) != nil {
 			t.Errorf("read-only CLI flag %s was exposed", name)
 		}
