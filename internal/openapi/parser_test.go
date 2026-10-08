@@ -125,6 +125,105 @@ paths:
 	assert.True(t, bodyNames["password"])
 }
 
+func TestParseRequestBodyOmitsReadOnlyFields(t *testing.T) {
+	t.Parallel()
+
+	parsed, err := Parse([]byte(`
+openapi: 3.0.3
+info:
+  title: Jobs API
+  version: 1.0.0
+paths:
+  /jobs:
+    post:
+      operationId: createJob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobPostRequestBody'
+      responses:
+        '200':
+          description: Created job
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+components:
+  schemas:
+    Job:
+      type: object
+      required: [kind, targetId, comment, parentJob]
+      properties:
+        id:
+          type: integer
+        kind:
+          type: string
+          enum: [UNDO]
+        targetId:
+          type: integer
+        comment:
+          type: string
+          readOnly: true
+        parentJob:
+          readOnly: true
+          allOf:
+            - $ref: '#/components/schemas/Job'
+        password:
+          type: string
+          writeOnly: true
+        visible:
+          readOnly: false
+          allOf:
+            - type: string
+        server-name:
+          type: string
+          readOnly: true
+        server_name:
+          type: string
+    JobPostRequestBody:
+      type: object
+      required: [kind, targetId]
+      allOf:
+        - $ref: '#/components/schemas/Job'
+      properties:
+        job:
+          $ref: '#/components/schemas/Job'
+`))
+	require.NoError(t, err)
+
+	endpoint := findParsedEndpointByPath(t, parsed, "POST", "/jobs")
+	assert.True(t, endpoint.BodyRequired)
+	byName := map[string]spec.Param{}
+	var bodyNames []string
+	for _, param := range endpoint.Body {
+		byName[param.Name] = param
+		bodyNames = append(bodyNames, param.Name)
+	}
+	assert.Equal(t, []string{"id", "job", "kind", "password", "server_name", "targetId", "visible"}, bodyNames)
+	assert.True(t, byName["kind"].Required)
+	assert.True(t, byName["targetId"].Required)
+	assert.Equal(t, []string{"UNDO"}, byName["kind"].Enum)
+
+	fields := map[string]spec.Param{}
+	var fieldNames []string
+	for _, field := range byName["job"].Fields {
+		fields[field.Name] = field
+		fieldNames = append(fieldNames, field.Name)
+	}
+	assert.Equal(t, []string{"id", "kind", "password", "server_name", "targetId", "visible"}, fieldNames)
+	assert.True(t, fields["kind"].Required)
+	assert.True(t, fields["targetId"].Required)
+
+	responseFields := map[string]spec.TypeField{}
+	for _, field := range parsed.Types["Job"].Fields {
+		responseFields[field.Name] = field
+	}
+	assert.Contains(t, responseFields, "comment")
+	assert.Contains(t, responseFields, "parentJob")
+}
+
 func TestGlobalParameterFilteringDoesNotDropRepeatedHeaders(t *testing.T) {
 	t.Parallel()
 

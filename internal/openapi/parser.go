@@ -5174,12 +5174,15 @@ func mapRequestBody(requestBodyRef *openapi3.RequestBodyRef, method, path string
 	body := make([]spec.Param, 0, len(names))
 	seenCamelNames := map[string]bool{}
 	for _, name := range names {
+		schema := schemaRefValue(properties[name])
+		if schema != nil && schema.ReadOnly {
+			continue
+		}
 		camelName := toCamelCase(name)
 		if seenCamelNames[camelName] {
 			continue
 		}
 		seenCamelNames[camelName] = true
-		schema := schemaRefValue(properties[name])
 		paramSchema := bodyParamSchema(schema)
 		description := schemaDescription(schema)
 		if description == "" {
@@ -5599,8 +5602,12 @@ func mapBodyFieldsDepth(schema *openapi3.Schema, inferCSVArrays bool, visited ma
 
 	fields := make([]spec.Param, 0, len(names))
 	for _, name := range names {
-		fieldSchema := bodyParamSchema(schemaRefValue(schema.Properties[name]))
-		description := schemaDescription(schemaRefValue(schema.Properties[name]))
+		propertySchema := schemaRefValue(schema.Properties[name])
+		if propertySchema != nil && propertySchema.ReadOnly {
+			continue
+		}
+		fieldSchema := bodyParamSchema(propertySchema)
+		description := schemaDescription(propertySchema)
 		if description == "" {
 			description = schemaDescription(fieldSchema)
 		}
